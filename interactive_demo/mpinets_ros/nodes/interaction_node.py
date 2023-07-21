@@ -136,9 +136,23 @@ class MPiNetsInterface:
             self.planning_callback,
             queue_size=5,
         )
+
+        self.joint_states_subscriber = rospy.Subscriber(
+            "/mpinets/joint_states",
+            JointState,
+            self.joint_state_callback,
+            queue_size=1,
+        )
+
         time.sleep(1)
         self.reset_franka()
-
+        print("current_joint_state is: ",self.current_joint_state)
+    def joint_state_callback(self, msg):
+        """
+        get the latest joint_state for start next plan
+        """
+        self.current_joint_state = np.array(msg.position)
+        # print("current_joint_state is: ",self.current_joint_state)
     def reset_franka(self):
         """
         Resets the robot to the neutral pose and resets the current plan
@@ -399,17 +413,18 @@ class MPiNetsInterface:
         self.current_plan = [
             list(point.positions) + NEUTRAL_CONFIG[7:].tolist() for point in msg.points
         ]
-        while self.visualize_plan:
-            for q in self.current_plan:
-                joint_msg = JointState()
-                joint_msg.header.stamp = rospy.Time.now()
-                joint_msg.header.frame_id = "panda_link0"
-                joint_msg.position = q
-                joint_msg.name = JOINT_NAMES
-                # Checking one more time in case there's a race condition
-                if self.visualize_plan:
-                    self.planned_joint_states_publisher.publish(joint_msg)
-                rospy.sleep(0.12)
+        print("the current plan is",self.current_plan)
+        # while self.visualize_plan:
+        for q in self.current_plan:
+            joint_msg = JointState()
+            joint_msg.header.stamp = rospy.Time.now()
+            joint_msg.header.frame_id = "panda_link0"
+            joint_msg.position = q
+            joint_msg.name = JOINT_NAMES
+            # Checking one more time in case there's a race condition
+            # if self.visualize_plan:
+            self.planned_joint_states_publisher.publish(joint_msg)
+            rospy.sleep(0.01)
 
     def plan_button_callback(self, feedback):
         """

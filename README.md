@@ -382,3 +382,11 @@ If you find this work useful in your research, please cite:
     booktitle = {Proceedings of the 6th Conference on Robot Learning (CoRL)},
 	  year={2022}
 	}
+
+
+docker run --name mpinet_test -d --interactive --tty --gpus all --network host --privileged --env DISPLAY=unix$DISPLAY --env XAUTHORITY --env NVIDIA_DRIVER_CAPABILITIES=all --env "ACCEPT_EULA=Y" --volume /home/andylee/motion-policy-networks:/root/mpinets mpinets /bin/bash -c 'export PYTHONPATH=/root/mpinets:$PYTHONPATH; git config --global --add safe.directory /root/mpinets; /bin/bash'
+
+python3 mpinets/run_inference.py mpinets_hybrid_expert.ckpt hybrid_solvable_problems.pkl tabletop neutral-start
+
+roslaunch mpinets_ros visualize.launch mdl_path:=/root/mpinets/mpinets_hybrid_expert.ckpt point_cloud_path:=/root/mpinets/mpinets_real_point_cloud_data.npy
+

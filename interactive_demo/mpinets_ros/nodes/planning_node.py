@@ -44,7 +44,7 @@ import rospy
 NUM_ROBOT_POINTS = 2048
 NUM_OBSTACLE_POINTS = 4096
 NUM_TARGET_POINTS = 128
-MAX_ROLLOUT_LENGTH = 75
+MAX_ROLLOUT_LENGTH = 20
 
 
 class Planner:
@@ -301,6 +301,15 @@ class PlanningNode:
         )
         self.full_point_cloud_publisher.publish(msg)
 
+    def interpolate(self,q0,q1,steps):
+        dq=(q1-q0)/steps
+        q_total=[]
+        for i in range(steps+1):
+            q=q0+i*dq
+            q_total.append(q)
+
+        return np.array(q_total)
+
     def plan_callback(self, msg: PlanningProblem):
         """
         Receives the planning problem from the interaction tool and calls the planner
@@ -329,21 +338,49 @@ class PlanningNode:
             rospy.logwarn("Model is not yet loaded and planner cannot yet be called")
             return
         rospy.loginfo(f"Attempting to plan")
+        t0 = time.time()
         success, plan = self.planner.plan(q0, target, scene_pc)
+        t1 = time.time()-t0
+        print("time for plan: ",t1)
         rospy.loginfo(f"Planning succeeded: {success}")
         joint_trajectory = JointTrajectory()
         joint_trajectory.header.stamp = rospy.Time.now()
         joint_trajectory.header.frame_id = "panda_link0"
         joint_trajectory.joint_names = msg.joint_names
-        for ii, q in enumerate(plan):
-            point = JointTrajectoryPoint(
-                time_from_start=rospy.Duration.from_sec(0.12 * ii)
-            )
-            for qi in q:
-                point.positions.append(qi)
-            joint_trajectory.points.append(point)
-        rospy.loginfo("Planning solution published")
+
+        plan=np.array(plan)
+        inter_steps = 10
+        for i in range(len(plan)-1):
+            q_start=plan[i]
+            q_end=plan[i+1]
+            q_array=self.interpolate(q_start,q_end,inter_steps)
+
+            for ii,q in enumerate(q_array):
+                point = JointTrajectoryPoint(time_from_start=rospy.Duration.from_sec(0.12 * i+0.012*ii))
+                for qi in q:
+                    point.positions.append(qi)
+                joint_trajectory.points.append(point)
+
         self.plan_publisher.publish(joint_trajectory)
+        rospy.loginfo("Planning solution published")
+        print("length of tra:",len(joint_trajectory.points))       
+
+        # positions = [point.positions for point in joint_trajectory.points]
+        # positions = np.array(positions)
+        # np.savetxt("/root/mpinets/joint_trajectory.txt", positions)
+        
+
+        # for ii, q in enumerate(plan):
+        #     point = JointTrajectoryPoint(
+        #         time_from_start=rospy.Duration.from_sec(0.12 * ii)
+        #     )
+        #     for qi in q:
+        #         point.positions.append(qi)
+        #     joint_trajectory.points.append(point)
+        # rospy.loginfo("Planning solution published")
+        # print("there are points with number: ",len(joint_trajectory.points))
+        # print(joint_trajectory.points)
+        # self.plan_publisher.publish(joint_trajectory)
 
 
 if __name__ == "__main__":
