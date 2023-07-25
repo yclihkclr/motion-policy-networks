@@ -348,8 +348,9 @@ class PlanningNode:
         joint_trajectory.header.frame_id = "panda_link0"
         joint_trajectory.joint_names = msg.joint_names
 
+        #this contains linear interpolation between every two points for step "inter_steps"
         plan=np.array(plan)
-        inter_steps = 10
+        inter_steps = 20
         for i in range(len(plan)-1):
             q_start=plan[i]
             q_end=plan[i+1]
@@ -365,6 +366,7 @@ class PlanningNode:
         rospy.loginfo("Planning solution published")
         print("length of tra:",len(joint_trajectory.points))       
 
+        # #this is for saving the trajectory 
         # positions = [point.positions for point in joint_trajectory.points]
         # positions = np.array(positions)
         # np.savetxt("/root/mpinets/joint_trajectory.txt", positions)
