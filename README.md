@@ -383,10 +383,22 @@ If you find this work useful in your research, please cite:
 	  year={2022}
 	}
 
-
+run docker image
+```
 docker run --name mpinet_test -d --interactive --tty --gpus all --network host --privileged --env DISPLAY=unix$DISPLAY --env XAUTHORITY --env NVIDIA_DRIVER_CAPABILITIES=all --env "ACCEPT_EULA=Y" --volume /home/andylee/motion-policy-networks:/root/mpinets mpinets /bin/bash -c 'export PYTHONPATH=/root/mpinets:$PYTHONPATH; git config --global --add safe.directory /root/mpinets; /bin/bash'
+```
 
+run original inference demo
+```
 python3 mpinets/run_inference.py mpinets_hybrid_expert.ckpt hybrid_solvable_problems.pkl tabletop neutral-start
+```
+run revised inference demo where the cylinders are replaced with boxes
+```
+python3 mpinets/run_inference_nocyl.py mpinets_hybrid_expert.ckpt hybrid_solvable_problems.pkl tabletop neutral-start
+```
 
+run ros node to communicate with others, remind the internal bool flag "self.mpinet_problem" for choosing scene point from pcl or primitives
+```
 roslaunch mpinets_ros visualize.launch mdl_path:=/root/mpinets/mpinets_hybrid_expert.ckpt point_cloud_path:=/root/mpinets/mpinets_real_point_cloud_data.npy
+```
 
