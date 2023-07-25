@@ -38,13 +38,16 @@ from functools import partial
 from geometrout.transform import SE3
 import argparse
 from typing import List, Tuple, Any
+from mpinets.geometry import construct_mixed_point_cloud
+from geometrout.primitive import Cuboid, Cylinder
 
 import rospy
+import pickle
 
 NUM_ROBOT_POINTS = 2048
 NUM_OBSTACLE_POINTS = 4096
 NUM_TARGET_POINTS = 128
-MAX_ROLLOUT_LENGTH = 20
+MAX_ROLLOUT_LENGTH = 30
 
 
 class Planner:
@@ -159,6 +162,13 @@ class PlanningNode:
         rospy.init_node("mpinets_planning_node")
         time.sleep(1)
 
+        # mpinet_problem_selection
+        self.mpinet_problem = True
+        self.env_type = 'tabletop'
+        self.problem_type = 'neutral_start'
+        self.problem_index = 0
+        self.file_path = "/root/mpinets/hybrid_solvable_problems.pkl"
+
         self.planner = None
         self.base_frame = "panda_link0"
         self.planning_problem_subscriber = rospy.Subscriber(
@@ -174,9 +184,12 @@ class PlanningNode:
             "/mpinets/plan", JointTrajectory, queue_size=1
         )
         rospy.loginfo("Loading data")
-        self.load_point_cloud_data(
-            rospy.get_param("/mpinets_planning_node/point_cloud_path")
-        )
+        if self.mpinet_problem:
+            self.load_primitive_problem_data(self.file_path)
+        else:
+            self.load_point_cloud_data(
+                rospy.get_param("/mpinets_planning_node/point_cloud_path")
+            )
         rospy.loginfo("Data loaded")
         rospy.loginfo("Loading model")
         self.planner = Planner(rospy.get_param("/mpinets_planning_node/mdl_path"))
@@ -226,6 +239,47 @@ class PlanningNode:
             len(xyz), size=NUM_OBSTACLE_POINTS, replace=False
         )
         return xyz[random_mask], rgba[random_mask]
+
+    def load_primitive_problem_data(self, path: str):
+        """
+        Loads scene from a problemSet file, turn the primitive collisions to pointcloud
+        , stores it to the class, and starts a publishing
+        loop to show it
+
+        :param path str: The path to the problemSet file
+        """
+
+        # Load the file
+        with open(path, "rb") as f:
+            problems = pickle.load(f)
+        problem_chosen = problems[self.env_type][self.problem_type][self.problem_index] 
+        for idx, obs in enumerate(problem_chosen.obstacles):
+            # replace cylinder with cube
+            if isinstance(obs, Cylinder):
+                obs_dims = [2*obs.radius,2*obs.radius,obs.height]
+                obs_center = obs.center
+                obs_quat = [obs.pose.so3._quat.w,obs.pose.so3._quat.x,obs.pose.so3._quat.y,obs.pose.so3._quat.z]
+                problem_chosen.obstacles[idx]=Cuboid(obs_center,obs_dims,obs_quat)
+        
+        # world frame pointcloud primitive with no robot and target points
+        scene_pc_4col = construct_mixed_point_cloud(problem_chosen.obstacles, NUM_OBSTACLE_POINTS*3)
+        scene_pc = scene_pc_4col[:, :3]
+        # random color
+        # scene_colors = np.random.rand(len(scene_pc), 3)
+        pink = np.array([1.0, 0.75, 0.80])
+        scene_colors = np.tile(pink, (len(scene_pc), 1))
+        # blue = np.array([0.0, 0.0, 1.0])
+        # scene_colors = np.tile(blue, (len(scene_pc), 1))
+        scene_colors = np.concatenate(
+            (scene_colors, np.ones((len(scene_colors), 1))), axis=1
+        )
+        assert scene_colors.shape[1] == 4
+        rospy.Timer(
+            rospy.Duration(1.0),
+            partial(self.publish_point_cloud_data, scene_pc, scene_colors),
+        )
+        self.full_scene_pc = scene_pc
+        self.full_scene_colors = scene_colors
 
     def load_point_cloud_data(self, path: str):
         """
@@ -350,7 +404,7 @@ class PlanningNode:
 
         #this contains linear interpolation between every two points for step "inter_steps"
         plan=np.array(plan)
-        inter_steps = 20
+        inter_steps = 3
         for i in range(len(plan)-1):
             q_start=plan[i]
             q_end=plan[i+1]
