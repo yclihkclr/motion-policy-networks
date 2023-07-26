@@ -48,8 +48,11 @@ NUM_ROBOT_POINTS = 2048
 NUM_OBSTACLE_POINTS = 4096
 NUM_TARGET_POINTS = 128
 MAX_ROLLOUT_LENGTH = 30
-
-
+MAX_INTERPO_STEPS = 10
+ENV_TYPE = 'dresser'
+PROBLEM_TYPE = 'neutral_start'
+PROBLEM_INDEX = 0
+PROBLEM_SET = True
 class Planner:
     @torch.no_grad()
     def __init__(self, mdl_file: str):
@@ -163,10 +166,10 @@ class PlanningNode:
         time.sleep(1)
 
         # mpinet_problem_selection
-        self.mpinet_problem = True
-        self.env_type = 'tabletop'
-        self.problem_type = 'neutral_start'
-        self.problem_index = 0
+        self.mpinet_problem = PROBLEM_SET
+        self.env_type = ENV_TYPE
+        self.problem_type = PROBLEM_TYPE
+        self.problem_index = PROBLEM_INDEX
         self.file_path = "/root/mpinets/hybrid_solvable_problems.pkl"
 
         self.planner = None
@@ -232,9 +235,10 @@ class PlanningNode:
                 xyz[:, 2] < 0.05,
             )
         )
-        workspace_mask = np.logical_or(task_tabletop_mask, mount_table_mask)
-        xyz = xyz[workspace_mask]
-        rgba = rgba[workspace_mask]
+        if not PROBLEM_SET:
+            workspace_mask = np.logical_or(task_tabletop_mask, mount_table_mask)
+            xyz = xyz[workspace_mask]
+            rgba = rgba[workspace_mask]
         random_mask = np.random.choice(
             len(xyz), size=NUM_OBSTACLE_POINTS, replace=False
         )
@@ -262,7 +266,7 @@ class PlanningNode:
                 problem_chosen.obstacles[idx]=Cuboid(obs_center,obs_dims,obs_quat)
         
         # world frame pointcloud primitive with no robot and target points
-        scene_pc_4col = construct_mixed_point_cloud(problem_chosen.obstacles, NUM_OBSTACLE_POINTS*3)
+        scene_pc_4col = construct_mixed_point_cloud(problem_chosen.obstacles, NUM_OBSTACLE_POINTS*10)
         scene_pc = scene_pc_4col[:, :3]
         # random color
         # scene_colors = np.random.rand(len(scene_pc), 3)
@@ -403,19 +407,18 @@ class PlanningNode:
         joint_trajectory.joint_names = msg.joint_names
 
         #this contains linear interpolation between every two points for step "inter_steps"
-        plan=np.array(plan)
-        inter_steps = 3
+        plan=np.array(plan) 
         for i in range(len(plan)-1):
             q_start=plan[i]
             q_end=plan[i+1]
-            q_array=self.interpolate(q_start,q_end,inter_steps)
+            q_array=self.interpolate(q_start,q_end,MAX_INTERPO_STEPS)
 
             for ii,q in enumerate(q_array):
                 point = JointTrajectoryPoint(time_from_start=rospy.Duration.from_sec(0.12 * i+0.012*ii))
                 for qi in q:
                     point.positions.append(qi)
                 joint_trajectory.points.append(point)
-
+        rospy.set_param("/mpinets_planning_node/visualize",False)
         self.plan_publisher.publish(joint_trajectory)
         rospy.loginfo("Planning solution published")
         print("length of tra:",len(joint_trajectory.points))       

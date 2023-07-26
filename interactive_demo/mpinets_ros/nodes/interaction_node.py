@@ -413,19 +413,24 @@ class MPiNetsInterface:
         self.current_plan = [
             list(point.positions) + NEUTRAL_CONFIG[7:].tolist() for point in msg.points
         ]
-        print("the current plan is",self.current_plan)
-        # while self.visualize_plan:
-        for q in self.current_plan:
-            joint_msg = JointState()
-            joint_msg.header.stamp = rospy.Time.now()
-            joint_msg.header.frame_id = "panda_link0"
-            joint_msg.position = q
-            joint_msg.name = JOINT_NAMES
-            # Checking one more time in case there's a race condition
-            # if self.visualize_plan:
-            self.planned_joint_states_publisher.publish(joint_msg)
-            rospy.sleep(0.01)
-
+        self.visualize_plan = True
+        rospy.set_param("/mpinets_planning_node/visualize",True)
+        # print("the current plan is",self.current_plan)
+        n = 0
+        nmax = 5 # max repeat times
+        while self.visualize_plan and n<nmax:
+            self.visualize_plan = rospy.get_param("/mpinets_planning_node/visualize")
+            n+=1
+            for q in self.current_plan:
+                joint_msg = JointState()
+                joint_msg.header.stamp = rospy.Time.now()
+                joint_msg.header.frame_id = "panda_link0"
+                joint_msg.position = q
+                joint_msg.name = JOINT_NAMES
+                # Checking one more time in case there's a race condition
+                # if self.visualize_plan:
+                self.planned_joint_states_publisher.publish(joint_msg)
+                rospy.sleep(0.002)     
     def plan_button_callback(self, feedback):
         """
         This is called whenever the plan button is clicked. It publishes a planning problem
