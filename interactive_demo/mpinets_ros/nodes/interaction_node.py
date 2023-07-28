@@ -459,6 +459,7 @@ class MPiNetsInterface:
                 msg.target.transform.rotation.z,
                 msg.target.transform.rotation.w,
             ) = self.target_xyzw
+            print("the target xyzw is:",self.target_xyzw)
             msg.q0 = JointState(position=self.current_joint_state[:7])
             self.visualize_plan = True
             self.planning_problem_publisher.publish(msg)

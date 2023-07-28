@@ -40,6 +40,7 @@ import argparse
 from typing import List, Tuple, Any
 from mpinets.geometry import construct_mixed_point_cloud
 from geometrout.primitive import Cuboid, Cylinder
+from geometry_msgs.msg import Pose
 
 import rospy
 import pickle
@@ -48,7 +49,7 @@ NUM_ROBOT_POINTS = 2048
 NUM_OBSTACLE_POINTS = 4096
 NUM_TARGET_POINTS = 128
 MAX_ROLLOUT_LENGTH = 30
-MAX_INTERPO_STEPS = 10
+MAX_INTERPO_STEPS = 5
 ENV_TYPE = 'dresser'
 PROBLEM_TYPE = 'neutral_start'
 PROBLEM_INDEX = 0
@@ -185,6 +186,9 @@ class PlanningNode:
         )
         self.plan_publisher = rospy.Publisher(
             "/mpinets/plan", JointTrajectory, queue_size=1
+        )
+        self.goal_publisher = rospy.Publisher(
+            "/mpinets/goal", Pose, queue_size=1
         )
         rospy.loginfo("Loading data")
         if self.mpinet_problem:
@@ -389,6 +393,17 @@ class PlanningNode:
                 msg.target.transform.rotation.z,
             ],
         )
+        current_goal = Pose()
+        current_goal.position.x = msg.target.transform.translation.x
+        current_goal.position.y = msg.target.transform.translation.y
+        current_goal.position.z = msg.target.transform.translation.z
+        current_goal.orientation.x = msg.target.transform.rotation.x
+        current_goal.orientation.y = msg.target.transform.rotation.y
+        current_goal.orientation.z = msg.target.transform.rotation.z
+        current_goal.orientation.w =  msg.target.transform.rotation.w       
+        self.current_goal = current_goal
+        self.goal_publisher.publish(self.current_goal)
+
         scene_pc, scene_colors = self.clean_point_cloud(
             self.full_scene_pc, self.full_scene_colors
         )
